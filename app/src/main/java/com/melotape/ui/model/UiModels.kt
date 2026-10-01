@@ -71,3 +71,29 @@ data class UserProfileUi(
     val totalStorageLabel: String,
     val storageUsedFraction: Float,
 )
+
+/**
+ * Lightweight UI model for a playlist / mixtape.
+ */
+@Immutable
+data class PlaylistUi(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    val coverArtUri: Any? = null,
+    val songCount: Int = 0,
+    val totalDurationFormatted: String = "",
+    val isPinned: Boolean = false,
+)
+
+/**
+ * Track sorting options for the Cassette Album Detail / Song List sequence menu.
+ */
+enum class SongSortOrder(val displayName: String) {
+    ORIGINAL("Original Sequence"),
+    TITLE("Song Title (A-Z)"),
+    ARTIST("Artist (A-Z)"),
+    DURATION("Duration (Longest first)"),
+    RECENTLY_ADDED("Recently Added"),
+}
+

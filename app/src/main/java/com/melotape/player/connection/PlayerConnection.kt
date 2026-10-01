@@ -6,8 +6,10 @@ import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.melotape.di.ApplicationScope
+import com.melotape.di.MainDispatcher
 import com.melotape.player.service.MusicPlaybackService
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +22,7 @@ import javax.inject.Singleton
 class PlayerConnection @Inject constructor(
     @param:ApplicationContext private val context: Context,
     @param:ApplicationScope private val applicationScope: CoroutineScope,
+    @param:MainDispatcher private val mainDispatcher: CoroutineDispatcher,
 ) {
     private val _controller = MutableStateFlow<MediaController?>(null)
     val controller: StateFlow<MediaController?> = _controller.asStateFlow()
@@ -33,7 +36,7 @@ class PlayerConnection @Inject constructor(
     fun connect() {
         if (_controller.value != null) return
 
-        applicationScope.launch {
+        applicationScope.launch(mainDispatcher) {
             val token = SessionToken(
                 context,
                 ComponentName(context, MusicPlaybackService::class.java)
@@ -56,7 +59,10 @@ class PlayerConnection @Inject constructor(
     }
 
     fun disconnect() {
-        _controller.value?.release()
-        _controller.value = null
+        applicationScope.launch(mainDispatcher) {
+            _controller.value?.release()
+            _controller.value = null
+        }
     }
 }
+

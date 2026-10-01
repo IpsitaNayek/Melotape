@@ -34,6 +34,11 @@ fun CassetteHeader(
     onShuffle: () -> Unit,
     onSort: () -> Unit,
     modifier: Modifier = Modifier,
+    tapeLengthLabel: String = "C-90 STEREO",
+    yearLabel: String? = "REC. 1994",
+    reelLabel: String = "REEL 01",
+    sideTracksLabel: String = "Side A Tracks",
+    sortLabel: String = "Sequence",
 ) {
     Column(
         modifier = modifier
@@ -71,33 +76,53 @@ fun CassetteHeader(
         ) {
             Column {
                 // Cassette Label Header Strip
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Cream)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = sideLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Burgundy,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        )
+                        if (!yearLabel.isNullOrBlank()) {
+                            Text(
+                                text = yearLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF64748B),
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            )
+                        }
+                        Text(
+                            text = tapeLengthLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Burgundy,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        )
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
                     Text(
-                        text = sideLabel,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
                         color = Color(0xFF1E293B),
-                    )
-                    Text(
-                        text = "REC. 1994",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF64748B),
-                    )
-                    Text(
-                        text = "C-90 STEREO",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Burgundy,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
 
                 Spacer(Modifier.height(14.dp))
+
 
                 // Tape Window with Dual Reel Hubs & Tape Bridge
                 Box(
@@ -216,13 +241,13 @@ fun CassetteHeader(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Side A Tracks",
+                    text = sideTracksLabel,
                     style = MaterialTheme.typography.titleMedium,
                     color = TextPrimary,
                 )
                 Spacer(Modifier.width(8.dp))
                 TapeChip(
-                    text = "REEL 01",
+                    text = reelLabel,
                     tone = ChipTone.Surface,
                     leadingDot = false,
                 )
@@ -237,7 +262,7 @@ fun CassetteHeader(
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    text = "Sequence",
+                    text = sortLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                 )
@@ -245,3 +270,4 @@ fun CassetteHeader(
         }
     }
 }
+

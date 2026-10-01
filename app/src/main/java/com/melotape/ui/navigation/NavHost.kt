@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.melotape.ui.components.MiniPlayerPlaceholder
 import com.melotape.ui.screens.auth.SignInScreen
 import com.melotape.ui.screens.downloads.DownloadsScreen
@@ -44,6 +45,9 @@ fun MelotapeNavHost(
 
     val isTopLevelRoute = bottomNavItems.any { it.screen.route == currentDestination?.route }
 
+    val playerViewModel: com.melotape.ui.screens.nowplaying.NowPlayingViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val playerState by playerViewModel.uiState.collectAsStateWithLifecycle()
+
     Scaffold(
         modifier = modifier.background(Background),
         containerColor = Background,
@@ -51,8 +55,13 @@ fun MelotapeNavHost(
             if (isTopLevelRoute) {
                 Column {
                     // Mini player sits just above the bottom nav
-                    MiniPlayerPlaceholder(
-                        onTap = { navController.navigate(Screen.NowPlaying.route) }
+                    com.melotape.ui.components.MiniPlayer(
+                        song = playerState.currentSong,
+                        isPlaying = playerState.isPlaying,
+                        progress = playerState.progress,
+                        onPlayPause = playerViewModel::onPlayPause,
+                        onToggleLoved = playerViewModel::onToggleLoved,
+                        onTap = { navController.navigate(Screen.NowPlaying.route) },
                     )
                     MelotapeBottomBar(
                         navController = navController,
@@ -125,6 +134,7 @@ fun MelotapeNavHost(
             ) {
                 NowPlayingRoute(
                     onBack = { navController.popBackStack() },
+                    viewModel = playerViewModel,
                 )
             }
 

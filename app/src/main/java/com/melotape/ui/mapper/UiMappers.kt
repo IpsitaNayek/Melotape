@@ -58,3 +58,21 @@ fun UserProfile.toProfileUi(): UserProfileUi {
         storageUsedFraction = fraction,
     )
 }
+
+fun com.melotape.domain.model.Playlist.toUi(): com.melotape.ui.model.PlaylistUi {
+    val durationMin = totalDurationMs / 1000 / 60
+    val durationHrs = durationMin / 60
+    val remMin = durationMin % 60
+    val formattedDuration = if (durationHrs > 0) "${durationHrs}h ${remMin}m" else "${durationMin}m"
+
+    return com.melotape.ui.model.PlaylistUi(
+        id = id,
+        name = name,
+        description = description,
+        coverArtUri = coverArtUri,
+        songCount = songCount,
+        totalDurationFormatted = formattedDuration,
+        isPinned = isPinned,
+    )
+}
+

@@ -9,6 +9,7 @@ import com.melotape.domain.model.Playlist
 import com.melotape.domain.repository.MusicRepository
 import com.melotape.domain.repository.PlaylistRepository
 import com.melotape.domain.repository.UserRepository
+import com.melotape.player.controller.PlayerController
 import com.melotape.ui.mapper.toItemUi
 import com.melotape.ui.model.SongItemUi
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,7 +25,7 @@ data class HomeUiState(
     val recentlyPlayed: List<SongItemUi> = emptyList(),
     val downloadedSongs: List<SongItemUi> = emptyList(),
     val pocketMixtape: List<SongItemUi> = emptyList(),
-    val isPlaying: Boolean = true,
+    val isPlaying: Boolean = false,
     val hasAudioPermission: Boolean = false,
     val isLoading: Boolean = false,
 )
@@ -35,25 +36,71 @@ class HomeViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val userRepository: UserRepository,
     private val permissionChecker: MediaPermissionChecker,
+    private val playerController: PlayerController,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(
+    private val tapeCounterState = MutableStateFlow("042")
+
+    private data class RepositorySnapshot(
+        val recent: List<SongItemUi> = emptyList(),
+        val downloaded: List<SongItemUi> = emptyList(),
+        val local: List<SongItemUi> = emptyList(),
+        val featuredPlaylist: Playlist? = null,
+    )
+
+    private val repositoryDataFlow: Flow<RepositorySnapshot> = combine(
+        musicRepository.getRecentlyPlayed(),
+        musicRepository.getDownloadedSongs(),
+        musicRepository.getLocalSongs(),
+        playlistRepository.getPlaylists(),
+    ) { recent, downloaded, local, playlists ->
+        RepositorySnapshot(
+            recent = recent.map { it.toItemUi() },
+            downloaded = downloaded.map { it.toItemUi() },
+            local = local.map { it.toItemUi() },
+            featuredPlaylist = playlists.find { it.isPinned } ?: playlists.firstOrNull(),
+        )
+    }
+
+    val uiState: StateFlow<HomeUiState> = combine(
+        repositoryDataFlow,
+        playerController.playbackState,
+        tapeCounterState,
+    ) { repo, playback, counter ->
+        val isPlaying = playback.isPlaying
+        val status = if (isPlaying) {
+            "● SPINNING SIDE A • DECK CALIBRATED"
+        } else if (playback.currentSong != null) {
+            "○ DECK IDLE • TAPE LOADED"
+        } else {
+            "○ DECK STANDBY • CALIBRATED"
+        }
+
         HomeUiState(
+            greeting = "Good evening, Alex",
+            statusLine = status,
+            tapeCounter = counter,
+            featuredMixtape = repo.featuredPlaylist,
+            recentlyPlayed = repo.recent,
+            downloadedSongs = repo.downloaded,
+            pocketMixtape = repo.local,
+            isPlaying = isPlaying,
+            hasAudioPermission = permissionChecker.hasPermission(),
+            isLoading = false,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = HomeUiState(
             hasAudioPermission = permissionChecker.hasPermission(),
             isLoading = true,
-        )
+        ),
     )
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     val requiredPermission: String
         get() = permissionChecker.requiredPermission
 
-    init {
-        loadHomeData()
-    }
-
     fun onPermissionResult(isGranted: Boolean) {
-        _uiState.update { it.copy(hasAudioPermission = isGranted) }
         if (isGranted) {
             onRescanLocal()
         }
@@ -63,38 +110,24 @@ class HomeViewModel @Inject constructor(
         return permissionChecker.createAppSettingsIntent()
     }
 
-    private fun loadHomeData() {
-        viewModelScope.launch {
-            combine(
-                musicRepository.getRecentlyPlayed(),
-                musicRepository.getDownloadedSongs(),
-                musicRepository.getLocalSongs(),
-                playlistRepository.getPlaylists(),
-            ) { recent, downloaded, local, playlists ->
-                HomeUiState(
-                    greeting = "Good evening, Alex",
-                    statusLine = "● SPINNING SIDE A • DECK CALIBRATED",
-                    tapeCounter = "042",
-                    featuredMixtape = playlists.find { it.isPinned } ?: playlists.firstOrNull(),
-                    recentlyPlayed = recent.map { it.toItemUi() },
-                    downloadedSongs = downloaded.map { it.toItemUi() },
-                    pocketMixtape = local.map { it.toItemUi() },
-                    isPlaying = true,
-                    hasAudioPermission = permissionChecker.hasPermission(),
-                    isLoading = false,
-                )
-            }.collect { state ->
-                _uiState.value = state
-            }
-        }
+    fun onPlayPause() {
+        playerController.togglePlayPause()
     }
 
-    fun onPlayPause() {
-        _uiState.update { it.copy(isPlaying = !it.isPlaying) }
+    fun onRewind() {
+        playerController.seekRelative(-10_000L)
+    }
+
+    fun onFastForward() {
+        playerController.seekRelative(10_000L)
+    }
+
+    fun onStop() {
+        playerController.stop()
     }
 
     fun onResetTapeCounter() {
-        _uiState.update { it.copy(tapeCounter = "000") }
+        tapeCounterState.value = "000"
     }
 
     fun onToggleLoved(songId: String) {
@@ -103,12 +136,27 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun onRescanLocal() {
-        _uiState.update { it.copy(statusLine = "● RESCANNING LOCAL TRACKS...") }
-        (musicRepository as? MusicRepositoryImpl)?.forceRescanLocal()
+    fun onPlaySong(songItem: SongItemUi) {
         viewModelScope.launch {
-            kotlinx.coroutines.delay(800)
-            _uiState.update { it.copy(statusLine = "● LOCAL TRACKS INDEXED • DECK READY") }
+            musicRepository.getSongById(songItem.id).firstOrNull()?.let { song ->
+                playerController.setQueue(listOf(song), startIndex = 0, playWhenReady = true)
+            }
         }
+    }
+
+    fun onPlayFeatured() {
+        val featured = uiState.value.featuredMixtape ?: return
+        viewModelScope.launch {
+            playlistRepository.getPlaylistSongs(featured.id).firstOrNull()?.let { songs ->
+                if (songs.isNotEmpty()) {
+                    playerController.setQueue(songs, startIndex = 0, playWhenReady = true)
+                }
+            }
+        }
+    }
+
+
+    fun onRescanLocal() {
+        (musicRepository as? MusicRepositoryImpl)?.forceRescanLocal()
     }
 }

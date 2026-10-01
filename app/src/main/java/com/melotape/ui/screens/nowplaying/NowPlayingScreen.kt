@@ -111,6 +111,7 @@ fun NowPlayingScreen(
         VinylPlatter(
             artwork = state.currentSong?.artwork,
             isPlaying = state.isPlaying,
+            progress = state.progress,
             size = 270.dp,
         )
 

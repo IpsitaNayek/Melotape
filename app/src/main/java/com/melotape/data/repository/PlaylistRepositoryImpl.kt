@@ -6,6 +6,7 @@ import com.melotape.data.db.dao.SongDao
 import com.melotape.data.db.entity.PlaylistEntity
 import com.melotape.data.db.entity.PlaylistSongEntity
 import com.melotape.data.db.entity.toDomain
+import com.melotape.data.db.entity.toEntity
 import com.melotape.di.IoDispatcher
 import com.melotape.domain.model.Playlist
 import com.melotape.domain.model.Song
@@ -26,10 +27,96 @@ class PlaylistRepositoryImpl @Inject constructor(
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : PlaylistRepository {
 
+    private var hasAttemptedSeed = false
+
+    private suspend fun seedDefaultPlaylists() = withContext(ioDispatcher) {
+        val initialSongs = com.melotape.data.fake.FakeMusicRepository.createInitialSongList()
+        // Save initial songs into songDao first so foreign key references are valid
+        songDao.upsertAll(initialSongs.map { it.toEntity() })
+
+        val playlists = listOf(
+            PlaylistEntity(
+                id = "pl_indie",
+                name = "Indie Cassette Nostalgia",
+                description = "Warm analog masterings, dreamy jangly guitars, & bedroom pop archives.",
+                coverArtUri = null,
+                pinned = true,
+                createdAt = 1704067200000L,
+                updatedAt = 1704067200000L,
+            ),
+            PlaylistEntity(
+                id = "pl_tokyo",
+                name = "Tokyo Vinyl Sessions",
+                description = "City Pop • Casiopea, Tatsuro Yamashita archives",
+                coverArtUri = null,
+                pinned = false,
+                createdAt = 1704153600000L,
+                updatedAt = 1704153600000L,
+            ),
+            PlaylistEntity(
+                id = "pl_synth",
+                name = "Midnight Drive",
+                description = "Synthwave • Kavinsky, Gunship, retro electro",
+                coverArtUri = null,
+                pinned = false,
+                createdAt = 1704240000000L,
+                updatedAt = 1704240000000L,
+            ),
+            PlaylistEntity(
+                id = "pl_dreampop",
+                name = "80s Dream Pop",
+                description = "Cocteau Twins • Beach House • Analog dreams",
+                coverArtUri = null,
+                pinned = false,
+                createdAt = 1704326400000L,
+                updatedAt = 1704326400000L,
+            ),
+        )
+
+        playlists.forEach { playlistDao.insertPlaylist(it) }
+
+        // Link initial songs to "pl_indie" (all 18+ songs)
+        initialSongs.forEachIndexed { index, song ->
+            playlistDao.insertPlaylistSong(
+                PlaylistSongEntity(
+                    playlistId = "pl_indie",
+                    songId = song.id,
+                    position = index,
+                    addedAt = System.currentTimeMillis() + index,
+                )
+            )
+        }
+
+        // Link a few songs to the other playlists
+        initialSongs.take(8).forEachIndexed { index, song ->
+            playlistDao.insertPlaylistSong(
+                PlaylistSongEntity(
+                    playlistId = "pl_tokyo",
+                    songId = song.id,
+                    position = index,
+                    addedAt = System.currentTimeMillis() + index,
+                )
+            )
+        }
+        initialSongs.drop(4).take(6).forEachIndexed { index, song ->
+            playlistDao.insertPlaylistSong(
+                PlaylistSongEntity(
+                    playlistId = "pl_synth",
+                    songId = song.id,
+                    position = index,
+                    addedAt = System.currentTimeMillis() + index,
+                )
+            )
+        }
+    }
+
     override fun getPlaylists(): Flow<List<Playlist>> {
         return playlistDao.getActivePlaylists().flatMapLatest { entities ->
             if (entities.isEmpty()) {
-                // Return flow with default seed playlists or empty
+                if (!hasAttemptedSeed) {
+                    hasAttemptedSeed = true
+                    seedDefaultPlaylists()
+                }
                 flowOf(emptyList())
             } else {
                 val flows = entities.map { entity ->
@@ -91,7 +178,7 @@ class PlaylistRepositoryImpl @Inject constructor(
         playlistDao.softDeletePlaylist(playlistId)
     }
 
-    suspend fun addSongToPlaylist(playlistId: String, songId: String) = withContext(ioDispatcher) {
+    override suspend fun addSongToPlaylist(playlistId: String, songId: String) = withContext(ioDispatcher) {
         val nextPos = playlistDao.getMaxPosition(playlistId) + 1
         val crossRef = PlaylistSongEntity(
             playlistId = playlistId,
@@ -102,7 +189,16 @@ class PlaylistRepositoryImpl @Inject constructor(
         playlistDao.insertPlaylistSong(crossRef)
     }
 
-    suspend fun removeSongFromPlaylist(playlistId: String, songId: String) = withContext(ioDispatcher) {
+    override suspend fun removeSongFromPlaylist(playlistId: String, songId: String) = withContext(ioDispatcher) {
         playlistDao.removeSongFromPlaylist(playlistId, songId)
     }
+
+    override suspend fun reorderPlaylist(playlistId: String, songIdsInOrder: List<String>) = withContext(ioDispatcher) {
+        playlistDao.reorderPlaylistSongs(playlistId, songIdsInOrder)
+    }
+
+    override suspend fun renamePlaylist(playlistId: String, name: String, description: String?) = withContext(ioDispatcher) {
+        playlistDao.updatePlaylistDetails(playlistId, name, description)
+    }
 }
+

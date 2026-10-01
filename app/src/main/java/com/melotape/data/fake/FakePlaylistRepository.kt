@@ -96,4 +96,30 @@ class FakePlaylistRepository @Inject constructor() : PlaylistRepository {
     override suspend fun deletePlaylist(playlistId: String) {
         playlistsFlow.value = playlistsFlow.value.filterNot { it.id == playlistId }
     }
+
+    override suspend fun addSongToPlaylist(playlistId: String, songId: String) {
+        val current = playlistsFlow.value
+        playlistsFlow.value = current.map { pl ->
+            if (pl.id == playlistId) pl.copy(songCount = pl.songCount + 1) else pl
+        }
+    }
+
+    override suspend fun removeSongFromPlaylist(playlistId: String, songId: String) {
+        val current = playlistsFlow.value
+        playlistsFlow.value = current.map { pl ->
+            if (pl.id == playlistId) pl.copy(songCount = (pl.songCount - 1).coerceAtLeast(0)) else pl
+        }
+    }
+
+    override suspend fun reorderPlaylist(playlistId: String, songIdsInOrder: List<String>) {
+        // In-memory no-op for fake
+    }
+
+    override suspend fun renamePlaylist(playlistId: String, name: String, description: String?) {
+        val current = playlistsFlow.value
+        playlistsFlow.value = current.map { pl ->
+            if (pl.id == playlistId) pl.copy(name = name, description = description) else pl
+        }
+    }
 }
+

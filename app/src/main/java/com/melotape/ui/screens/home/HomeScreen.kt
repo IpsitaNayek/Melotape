@@ -55,10 +55,19 @@ fun HomeRoute(
 
     HomeScreen(
         state = state,
-        onSongClick = { onNavigateToNowPlaying() },
-        onSeeAllClick = { sourceType -> onNavigateToSongList(sourceType, "") },
-        onPlayFeatured = { onNavigateToNowPlaying() },
+        onSongClick = { songItem ->
+            viewModel.onPlaySong(songItem)
+            onNavigateToNowPlaying()
+        },
+        onSeeAllClick = { sourceType, sourceId -> onNavigateToSongList(sourceType, sourceId) },
+        onPlayFeatured = {
+            viewModel.onPlayFeatured()
+            onNavigateToNowPlaying()
+        },
         onPlayPause = viewModel::onPlayPause,
+        onRewind = viewModel::onRewind,
+        onFastForward = viewModel::onFastForward,
+        onStop = viewModel::onStop,
         onResetCounter = viewModel::onResetTapeCounter,
         onRescanLocal = viewModel::onRescanLocal,
         onToggleLoved = viewModel::onToggleLoved,
@@ -79,9 +88,12 @@ fun HomeRoute(
 fun HomeScreen(
     state: HomeUiState,
     onSongClick: (SongItemUi) -> Unit,
-    onSeeAllClick: (String) -> Unit,
+    onSeeAllClick: (sourceType: String, sourceId: String) -> Unit,
     onPlayFeatured: () -> Unit,
     onPlayPause: () -> Unit,
+    onRewind: () -> Unit = {},
+    onFastForward: () -> Unit = {},
+    onStop: () -> Unit = {},
     onResetCounter: () -> Unit,
     onRescanLocal: () -> Unit,
     onToggleLoved: (String) -> Unit,
@@ -157,7 +169,8 @@ fun HomeScreen(
             FeaturedMixtapeCard(
                 playlist = featured,
                 onPlay = onPlayFeatured,
-                onQueue = onPlayFeatured,
+                onQueue = { onSeeAllClick("playlist", featured.id) },
+                onClick = { onSeeAllClick("playlist", featured.id) },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
@@ -168,8 +181,9 @@ fun HomeScreen(
         SectionHeader(
             title = "Recently Played",
             actionText = "See all",
-            onAction = { onSeeAllClick("recent") },
+            onAction = { onSeeAllClick("recent", "") },
         )
+
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -193,7 +207,7 @@ fun HomeScreen(
         SectionHeader(
             title = "Downloaded for Offline",
             actionText = "See all",
-            onAction = { onSeeAllClick("downloaded") },
+            onAction = { onSeeAllClick("downloaded", "") },
         )
         Text(
             text = "Side A/B Complete • 182 MB",
@@ -228,8 +242,9 @@ fun HomeScreen(
         SectionHeader(
             title = "Pocket Mixtape (On Device)",
             actionText = "See all",
-            onAction = { onSeeAllClick("local") },
+            onAction = { onSeeAllClick("local", "") },
         )
+
 
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             if (!state.hasAudioPermission) {
@@ -348,10 +363,10 @@ fun HomeScreen(
         // 7. Deck Master Calibration Transport Controls
         DeckTransport(
             isPlaying = state.isPlaying,
-            onRewind = {},
-            onStop = onPlayPause,
+            onRewind = onRewind,
+            onStop = onStop,
             onPlayPause = onPlayPause,
-            onFastForward = {},
+            onFastForward = onFastForward,
             onRecord = {},
             modifier = Modifier.padding(horizontal = 16.dp),
         )
@@ -369,6 +384,7 @@ private fun FeaturedMixtapeCard(
     onPlay: () -> Unit,
     onQueue: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
 ) {
     Box(
         modifier = modifier
@@ -376,8 +392,10 @@ private fun FeaturedMixtapeCard(
             .clip(RoundedCornerShape(16.dp))
             .background(Cream)
             .border(1.dp, Color(0xFFE2D6C0), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
             .padding(16.dp),
     ) {
+
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),

@@ -7,8 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.melotape.ui.theme.*
@@ -24,27 +24,31 @@ import com.melotape.ui.theme.*
 /**
  * Vinyl / Turntable platter with concentric grooves, center label with album art,
  * and mechanical tonearm resting on the record.
+ *
+ * Platter rotation uses Animatable to stop at the current angle when paused without snapping to 0.
+ * Tonearm tracks progress from outer to inner groove, lifting to park position when stopped.
  */
 @Composable
 fun VinylPlatter(
     artwork: Any?,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
+    progress: Float = 0f,
     size: Dp = 260.dp,
 ) {
-    // Rotation animation when playing
-    val infiniteTransition = rememberInfiniteTransition(label = "VinylSpin")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "VinylRotation",
-    )
+    // 1. Rotation animation: preserves current angle on pause
+    val rotationAnim = remember { Animatable(0f) }
 
-    val currentRotation = if (isPlaying) rotation else 0f
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (true) {
+                rotationAnim.animateTo(
+                    targetValue = rotationAnim.value + 360f,
+                    animationSpec = tween(durationMillis = 3000, easing = LinearEasing),
+                )
+            }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -97,11 +101,11 @@ fun VinylPlatter(
             )
         }
 
-        // 2. Center Record Label with artwork (rotates when playing)
+        // 2. Center Record Label with artwork (rotates smoothly using graphicsLayer)
         Box(
             modifier = Modifier
                 .size(size * 0.44f)
-                .rotate(currentRotation)
+                .graphicsLayer { rotationZ = rotationAnim.value % 360f }
                 .clip(CircleShape)
                 .background(Cream)
                 .border(2.dp, Amber, CircleShape),
@@ -124,9 +128,10 @@ fun VinylPlatter(
             )
         }
 
-        // 3. Tonearm resting on platter
+        // 3. Tonearm tracking the groove
         Tonearm(
             isPlaying = isPlaying,
+            progress = progress,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .offset(x = 12.dp, y = (-8).dp),
@@ -136,18 +141,34 @@ fun VinylPlatter(
 
 /**
  * Mechanical tonearm assembly with pivot base, curved arm, and cartridge head.
+ * Interpolates tracking angle across record grooves based on playback progress.
  */
 @Composable
 fun Tonearm(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
+    progress: Float = 0f,
 ) {
-    val armAngle = if (isPlaying) 22f else 5f
+    // Outer groove is ~18°, inner groove is ~34°. Park angle is 5°.
+    val targetAngle = if (isPlaying) {
+        18f + (progress.coerceIn(0f, 1f) * 16f)
+    } else {
+        5f
+    }
+
+    val animatedArmAngle by animateFloatAsState(
+        targetValue = targetAngle,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow,
+        ),
+        label = "TonearmSpring",
+    )
 
     Canvas(
         modifier = modifier
             .size(width = 80.dp, height = 140.dp)
-            .rotate(armAngle),
+            .graphicsLayer { rotationZ = animatedArmAngle },
     ) {
         val pivotCenter = Offset(60f, 15f)
 

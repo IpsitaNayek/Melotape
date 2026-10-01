@@ -5,10 +5,12 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import com.melotape.data.datastore.SettingsDataStore
 import com.melotape.di.ApplicationScope
+import com.melotape.di.MainDispatcher
 import com.melotape.domain.model.Song
 import com.melotape.player.connection.PlayerConnection
 import com.melotape.player.model.PlaybackStateUi
 import com.melotape.player.resolver.AudioSourceResolver
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,6 +29,7 @@ class PlayerControllerImpl @Inject constructor(
     private val audioSourceResolver: AudioSourceResolver,
     private val settingsDataStore: SettingsDataStore,
     @param:ApplicationScope private val applicationScope: CoroutineScope,
+    @param:MainDispatcher private val mainDispatcher: CoroutineDispatcher,
 ) : PlayerController {
 
     private val _playbackState = MutableStateFlow(PlaybackStateUi())
@@ -92,7 +95,7 @@ class PlayerControllerImpl @Inject constructor(
     }
 
     init {
-        applicationScope.launch {
+        applicationScope.launch(mainDispatcher) {
             playerConnection.controller.collect { controller ->
                 controller?.let { ctrl ->
                     ctrl.removeListener(playerListener)
@@ -127,7 +130,7 @@ class PlayerControllerImpl @Inject constructor(
 
     private fun startPositionPolling() {
         positionPollingJob?.cancel()
-        positionPollingJob = applicationScope.launch {
+        positionPollingJob = applicationScope.launch(mainDispatcher) {
             while (isActive) {
                 val ctrl = playerConnection.controller.value
                 if (ctrl != null && ctrl.isPlaying) {
@@ -147,10 +150,12 @@ class PlayerControllerImpl @Inject constructor(
     private fun stopPositionPolling() {
         positionPollingJob?.cancel()
         positionPollingJob = null
-        val ctrl = playerConnection.controller.value
-        if (ctrl != null) {
-            _playbackState.update {
-                it.copy(currentPositionMs = ctrl.currentPosition)
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value
+            if (ctrl != null) {
+                _playbackState.update {
+                    it.copy(currentPositionMs = ctrl.currentPosition)
+                }
             }
         }
     }
@@ -159,82 +164,105 @@ class PlayerControllerImpl @Inject constructor(
         activeQueue = songs
         _playbackState.update { it.copy(queue = songs, currentIndex = startIndex) }
 
-        val ctrl = playerConnection.controller.value ?: run {
-            playerConnection.connect()
-            return
-        }
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: run {
+                playerConnection.connect()
+                return@launch
+            }
 
-        val mediaItems = songs.map { audioSourceResolver.toMediaItem(it) }
-        ctrl.setMediaItems(mediaItems, startIndex, 0L)
-        ctrl.prepare()
-        if (playWhenReady) {
-            ctrl.play()
+            val mediaItems = songs.map { audioSourceResolver.toMediaItem(it) }
+            ctrl.setMediaItems(mediaItems, startIndex, 0L)
+            ctrl.prepare()
+            if (playWhenReady) {
+                ctrl.play()
+            }
         }
     }
 
     override fun play() {
-        val ctrl = playerConnection.controller.value ?: return
-        ctrl.play()
-    }
-
-    override fun pause() {
-        val ctrl = playerConnection.controller.value ?: return
-        ctrl.pause()
-    }
-
-    override fun togglePlayPause() {
-        val ctrl = playerConnection.controller.value ?: return
-        if (ctrl.isPlaying) {
-            ctrl.pause()
-        } else {
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
             ctrl.play()
         }
     }
 
+    override fun pause() {
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            ctrl.pause()
+        }
+    }
+
+    override fun togglePlayPause() {
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            if (ctrl.isPlaying) {
+                ctrl.pause()
+            } else {
+                ctrl.play()
+            }
+        }
+    }
+
     override fun seekTo(positionMs: Long) {
-        val ctrl = playerConnection.controller.value ?: return
-        val clamped = positionMs.coerceIn(0L, ctrl.duration.coerceAtLeast(0L))
-        ctrl.seekTo(clamped)
-        _playbackState.update { it.copy(currentPositionMs = clamped) }
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            val clamped = positionMs.coerceIn(0L, ctrl.duration.coerceAtLeast(0L))
+            ctrl.seekTo(clamped)
+            _playbackState.update { it.copy(currentPositionMs = clamped) }
+        }
     }
 
     override fun seekRelative(offsetMs: Long) {
-        val ctrl = playerConnection.controller.value ?: return
-        val target = (ctrl.currentPosition + offsetMs).coerceIn(0L, ctrl.duration.coerceAtLeast(0L))
-        ctrl.seekTo(target)
-        _playbackState.update { it.copy(currentPositionMs = target) }
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            val target = (ctrl.currentPosition + offsetMs).coerceIn(0L, ctrl.duration.coerceAtLeast(0L))
+            ctrl.seekTo(target)
+            _playbackState.update { it.copy(currentPositionMs = target) }
+        }
     }
 
     override fun next() {
-        val ctrl = playerConnection.controller.value ?: return
-        if (ctrl.hasNextMediaItem()) {
-            ctrl.seekToNextMediaItem()
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            if (ctrl.hasNextMediaItem()) {
+                ctrl.seekToNextMediaItem()
+            }
         }
     }
 
     override fun previous() {
-        val ctrl = playerConnection.controller.value ?: return
-        if (ctrl.currentPosition > 3000L || !ctrl.hasPreviousMediaItem()) {
-            ctrl.seekTo(0L)
-        } else {
-            ctrl.seekToPreviousMediaItem()
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            if (ctrl.currentPosition > 3000L || !ctrl.hasPreviousMediaItem()) {
+                ctrl.seekTo(0L)
+            } else {
+                ctrl.seekToPreviousMediaItem()
+            }
         }
     }
 
     override fun setRepeatMode(mode: Int) {
-        val ctrl = playerConnection.controller.value ?: return
-        ctrl.repeatMode = mode
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            ctrl.repeatMode = mode
+        }
     }
 
     override fun toggleShuffle() {
-        val ctrl = playerConnection.controller.value ?: return
-        ctrl.shuffleModeEnabled = !ctrl.shuffleModeEnabled
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            ctrl.shuffleModeEnabled = !ctrl.shuffleModeEnabled
+        }
     }
 
     override fun stop() {
-        val ctrl = playerConnection.controller.value ?: return
-        ctrl.stop()
-        stopPositionPolling()
-        _playbackState.update { it.copy(isPlaying = false, currentPositionMs = 0L) }
+        applicationScope.launch(mainDispatcher) {
+            val ctrl = playerConnection.controller.value ?: return@launch
+            ctrl.stop()
+            stopPositionPolling()
+            _playbackState.update { it.copy(isPlaying = false, currentPositionMs = 0L) }
+        }
     }
 }
+

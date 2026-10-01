@@ -60,6 +60,19 @@ interface PlaylistDao {
     @Query("SELECT COUNT(*) FROM playlists WHERE deleted = 0")
     fun getActivePlaylistCount(): Flow<Int>
 
+    @Query("UPDATE playlists SET name = :name, description = :description, updatedAt = :timestamp WHERE id = :id")
+    suspend fun updatePlaylistDetails(id: String, name: String, description: String?, timestamp: Long = System.currentTimeMillis())
+
+    @Query("UPDATE playlist_songs SET position = :position WHERE playlistId = :playlistId AND songId = :songId")
+    suspend fun updateSongPosition(playlistId: String, songId: String, position: Int)
+
+    @Transaction
+    suspend fun reorderPlaylistSongs(playlistId: String, songIdsInOrder: List<String>) {
+        songIdsInOrder.forEachIndexed { index, songId ->
+            updateSongPosition(playlistId, songId, index)
+        }
+    }
+
     @Query("SELECT COALESCE(MAX(position), -1) FROM playlist_songs WHERE playlistId = :playlistId")
     suspend fun getMaxPosition(playlistId: String): Int
 }

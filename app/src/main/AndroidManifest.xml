@@ -2,7 +2,34 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- ============================================================ -->
+    <!--  Permissions — grouped by phase in which they are used        -->
+    <!-- ============================================================ -->
+
+    <!-- Phase 4: Device Media Library -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />                 <!-- API 33+ -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />                                                       <!-- API ≤ 32 fallback -->
+
+    <!-- Phase 3/5: Jamendo API + Firebase (network) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Phase 6: Media playback foreground service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- Phase 6: Keep CPU alive during playback when screen is off -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Phase 5: Show download / cloud sync notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />               <!-- API 33+ -->
+
+    <!-- Phase 12: Upload — write to shared media (only needed for export / save to gallery) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />                                                       <!-- API ≤ 28 only -->
+
     <application
+        android:name=".MelotapeApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -11,6 +38,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Melotape">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -19,10 +47,19 @@
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".player.service.MusicPlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>
